@@ -1,4 +1,4 @@
--> Website: itransition5.goksu.me
--> Framework: Bootstrap
--> Deployed with: Docker (nginx)
--> Database (in docker): postgresql
+- **Website:** itransition5.goksu.me
+- **Framework:** Bootstrap
+- **Deployed with:** Docker (nginx)
+- **Database (in docker):** postgresql

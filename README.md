@@ -1,4 +1,6 @@
 - **Website:** itransition5.goksu.me
 - **Framework:** Bootstrap
 - **Deployed with:** Docker (nginx)
-- **Database (in docker):** postgresql
+- **Database (docker-compose):** postgresql
+
+[![Watch the video](https://img.youtube.com/vi/RXmnJUUXFPs/hqdefault.jpg)](https://youtu.be/RXmnJUUXFPs)

@@ -1,0 +1,233 @@
+﻿@model IEnumerable<UserManagement.Models.ApplicationUser>
+@{
+    ViewData["Title"] = "User Management";
+}
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"]</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet" />
+    <style>
+        body { background-color: #f8f9fa; }
+        .toolbar { background-color: #fff; padding: 1rem; border-radius: 0.25rem; margin-bottom: 1rem; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); }
+        .table-container { background-color: #fff; border-radius: 0.25rem; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); }
+        .status-badge { font-size: 0.875rem; padding: 0.25rem 0.5rem; }
+        .table th { background-color: #f8f9fa; font-weight: 600; }
+        .btn-toolbar .btn { margin-right: 0.5rem; }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-light bg-white shadow-sm mb-4">
+        <div class="container-fluid">
+            <div class="mb-4">
+                <h3 class="mb-2">User Management Panel</h3>
+                <p class="text-muted mb-0">Manage users, block/unblock accounts, and delete users.</p>
+            </div>
+
+            <div class="toolbar">
+            <a href="/" class="navbar-brand mb-0 h1 text-decoration-none">User Management System</a>
+            <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                @Html.AntiForgeryToken()
+                <button type="submit" class="btn btn-outline-danger btn-sm" data-bs-toggle="tooltip" title="Sign out">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </button>
+            </form>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="toolbar">
+            <div class="btn-toolbar" role="toolbar">
+                <button type="button" class="btn btn-warning" id="blockBtn" disabled data-bs-toggle="tooltip" title="Block selected users">
+                    <i class="bi bi-lock-fill"></i> Block
+                </button>
+                <button type="button" class="btn btn-success" id="unblockBtn" disabled data-bs-toggle="tooltip" title="Unblock selected users">
+                    <i class="bi bi-unlock-fill"></i>
+                </button>
+                <button type="button" class="btn btn-danger" id="deleteBtn" disabled data-bs-toggle="tooltip" title="Delete selected users">
+                    <i class="bi bi-trash-fill"></i>
+                </button>
+                <button type="button" class="btn btn-secondary" id="deleteUnverifiedBtn" data-bs-toggle="tooltip" title="Delete all unverified users">
+                    <i class="bi bi-person-x-fill"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="messageContainer"></div>
+
+        <div class="table-container">
+            <table class="table table-hover table-striped mb-0">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">
+                            <input type="checkbox" id="selectAll" class="form-check-input" />
+                        </th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Last Login</th>
+                        <th>Registration Time</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var user in Model)
+                    {
+                        <tr>
+                            <td>
+                                <input type="checkbox" class="form-check-input user-checkbox" value="@user.Id" />
+                            </td>
+                            <td>@user.UserName</td>
+                            <td>@user.Email</td>
+                            <td>
+                                @if (user.LastLoginTime.HasValue)
+                                {
+                                    @user.LastLoginTime.Value.ToString("yyyy-MM-dd HH:mm:ss")
+                                }
+                                else
+                                {
+                                    <span class="text-muted">Never</span>
+                                }
+                            </td>
+                            <td>@user.RegistrationTime.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                            <td>
+                                @if (user.Status == UserManagement.Models.UserStatus.Unverified)
+                                {
+                                    <span class="badge status-badge bg-secondary">Unverified</span>
+                                }
+                                else if (user.Status == UserManagement.Models.UserStatus.Active)
+                                {
+                                    <span class="badge status-badge bg-success">Active</span>
+                                }
+                                else
+                                {
+                                    <span class="badge status-badge bg-danger">Blocked</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(el => new bootstrap.Tooltip(el));
+
+        const selectAllCheckbox = document.getElementById('selectAll');
+        const userCheckboxes = document.querySelectorAll('.user-checkbox');
+        const blockBtn = document.getElementById('blockBtn');
+        const unblockBtn = document.getElementById('unblockBtn');
+        const deleteBtn = document.getElementById('deleteBtn');
+        const deleteUnverifiedBtn = document.getElementById('deleteUnverifiedBtn');
+
+        selectAllCheckbox.addEventListener('change', function() {
+            userCheckboxes.forEach(cb => cb.checked = this.checked);
+            updateToolbarButtons();
+        });
+
+        userCheckboxes.forEach(cb => {
+            cb.addEventListener('change', function() {
+                const allChecked = Array.from(userCheckboxes).every(c => c.checked);
+                const someChecked = Array.from(userCheckboxes).some(c => c.checked);
+                selectAllCheckbox.checked = allChecked;
+                selectAllCheckbox.indeterminate = someChecked && !allChecked;
+                updateToolbarButtons();
+            });
+        });
+
+        function updateToolbarButtons() {
+            const selectedCount = Array.from(userCheckboxes).filter(cb => cb.checked).length;
+            const hasSelection = selectedCount > 0;
+
+            blockBtn.disabled = !hasSelection;
+            unblockBtn.disabled = !hasSelection;
+            deleteBtn.disabled = !hasSelection;
+        }
+
+        function getSelectedUserIds() {
+            return Array.from(userCheckboxes)
+                .filter(cb => cb.checked)
+                .map(cb => cb.value);
+        }
+
+        function showMessage(message, type) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            document.getElementById('messageContainer').appendChild(alertDiv);
+
+            setTimeout(() => alertDiv.remove(), 5000);
+        }
+
+        async function performAction(action, userIds = null) {
+            const formData = new FormData();
+            formData.append('__RequestVerificationToken', document.querySelector('input[name="__RequestVerificationToken"]').value);
+
+            if (userIds) {
+                userIds.forEach(id => formData.append('userIds', id));
+            }
+
+            try {
+                const response = await fetch(`/Admin/${action}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    showMessage(result.message, 'success');
+
+                    if (result.redirect) {
+                        setTimeout(() => window.location.href = '/Account/Login', 1500);
+                    } else {
+                        setTimeout(() => window.location.reload(), 1500);
+                    }
+                } else {
+                    showMessage(result.message, 'danger');
+                }
+            } catch (error) {
+                showMessage('An error occurred. Please try again.', 'danger');
+            }
+        }
+
+        blockBtn.addEventListener('click', () => {
+            const userIds = getSelectedUserIds();
+            if (confirm(`Block ${userIds.length} user(s)?`)) {
+                performAction('BlockUsers', userIds);
+            }
+        });
+
+        unblockBtn.addEventListener('click', () => {
+            const userIds = getSelectedUserIds();
+            if (confirm(`Unblock ${userIds.length} user(s)?`)) {
+                performAction('UnblockUsers', userIds);
+            }
+        });
+
+        deleteBtn.addEventListener('click', () => {
+            const userIds = getSelectedUserIds();
+            if (confirm(`Permanently delete ${userIds.length} user(s)? This action cannot be undone.`)) {
+                performAction('DeleteUsers', userIds);
+            }
+        });
+
+        deleteUnverifiedBtn.addEventListener('click', () => {
+            if (confirm('Delete all unverified users? This action cannot be undone.')) {
+                performAction('DeleteUnverified');
+            }
+        });
+    </script>
+
+    @Html.AntiForgeryToken()
+</body>
+</html>

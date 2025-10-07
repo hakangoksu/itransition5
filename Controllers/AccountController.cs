@@ -1,9 +1,13 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using UserManagement.Models;
 using UserManagement.Services;
 using UserManagement.ViewModels;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 
 namespace UserManagement.Controllers;
 
@@ -13,6 +17,7 @@ public class AccountController : Controller
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly SignInManager<ApplicationUser> _signInManager;
     private readonly IEmailService _emailService;
+    private readonly ILogger<AccountController> _logger;
 
     public AccountController(
         UserManager<ApplicationUser> userManager,
@@ -98,26 +103,50 @@ public class AccountController : Controller
             Status = UserStatus.Unverified
         };
 
-        var result = await _userManager.CreateAsync(user, model.Password);
-
-        if (result.Succeeded)
+        try
         {
-            var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-            var callbackUrl = Url.Action(
-                "VerifyEmail",
-                "Account",
-                new { userId = user.Id, token },
-                protocol: Request.Scheme)!;
+            var result = await _userManager.CreateAsync(user, model.Password);
 
-            await _emailService.SendVerificationEmailAsync(user.Email!, user.UserName!, callbackUrl);
+            if (result.Succeeded)
+            {
+                var token = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+                var callbackUrl = Url.Action(
+                    "VerifyEmail",
+                    "Account",
+                    new { userId = user.Id, token },
+                    protocol: Request.Scheme)!;
 
-            TempData["SuccessMessage"] = "Registration successful! A verification email has been sent.";
-            return RedirectToAction(nameof(Login));
+                await _emailService.SendVerificationEmailAsync(user.Email!, user.UserName!, callbackUrl);
+
+                TempData["SuccessMessage"] = "Registration successful! A verification email has been sent.";
+                return RedirectToAction(nameof(Login));
+            }
+
+            foreach (var error in result.Errors)
+            {
+                ModelState.AddModelError(string.Empty, error.Description);
+            }
         }
-
-        foreach (var error in result.Errors)
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException pgEx)
         {
-            ModelState.AddModelError(string.Empty, error.Description);
+            if (pgEx.SqlState == "23505")
+            {
+                ModelState.AddModelError(string.Empty,
+                    "This email address is already registered. Please use a different email or try to login.");
+
+                Console.WriteLine($"[UNIQUE CONSTRAINT VIOLATION] Duplicate email attempt: {model.Email}");
+            }
+            else
+            {
+                ModelState.AddModelError(string.Empty,
+                    "An error occurred during registration. Please try again.");
+            }
+        }
+        catch (Exception ex)
+        {
+            ModelState.AddModelError(string.Empty,
+                "An unexpected error occurred. Please try again later.");
+            Console.WriteLine($"[ERROR] Registration failed: {ex.Message}");
         }
 
         return View(model);
